@@ -1,18 +1,7 @@
-export type Config = {
-  estateContractAddress: string;
-  landContractAddress: string;
-  rentalsSubgraphUrl: string;
-  landMultiplier: number;
-  estateLandMultiplier: number;
-};
-
-export type Scores = {
-  [address: string]: number;
-};
-
-export type RentalAsset = {
+export type AssetLockedInRentalsContract = {
   id: string;
   contractAddress: string;
   tokenId: string;
   lessor: string;
+  estateSize?: number;
 };
