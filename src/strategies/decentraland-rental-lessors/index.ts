@@ -93,37 +93,33 @@ async function fetchLandsAndEstatesInRentalsContract(
     }
   };
 
+  // If a snapshot is provided, use it as another filter of the query.
   if (typeof snapshot === 'number') {
     query.rentalAssets.__args.block = { number: snapshot };
   }
 
-  let acc: RentalsLandOrEstate[] = [];
+  let finalRentalLandsAndEstates: RentalsLandOrEstate[] = [];
 
-  let hasNext = true;
+  let hasMoreResults = true;
 
-  while (hasNext) {
+  while (hasMoreResults) {
     const result = await subgraphRequest(options.subgraphs.rentals, query);
 
-    if (
-      !result ||
-      !result.rentalAssets ||
-      !Array.isArray(result.rentalAssets)
-    ) {
-      break;
-    }
+    const rentalLandsAndEstates: RentalsLandOrEstate[] = result.rentalAssets;
 
-    const rentalAssets: RentalsLandOrEstate[] = result.rentalAssets;
+    // If the received length matches the requested length, there might be more results.
+    hasMoreResults =
+      rentalLandsAndEstates.length === query.rentalAssets.__args.first;
+    // If there are more results, skip the ones we already have on the next query.
+    query.rentalAssets.__args.skip += query.rentalAssets.__args.first;
 
-    if (rentalAssets.length < query.rentalAssets.__args.first) {
-      hasNext = false;
-    } else {
-      query.rentalAssets.__args.skip += query.rentalAssets.__args.first;
-    }
-
-    acc = [...acc, ...rentalAssets];
+    finalRentalLandsAndEstates = [
+      ...finalRentalLandsAndEstates,
+      ...rentalLandsAndEstates
+    ];
   }
 
-  return acc;
+  return finalRentalLandsAndEstates;
 }
 
 // For a given list of estates obtained from the rentals subgraph, fetch the estates that correspond to them in the marketplace subgraph.
@@ -132,17 +128,22 @@ async function fetchMarketplaceEstatesForProvidedRentalAssets(
   options,
   snapshot
 ): Promise<[RentalsLandOrEstate, MarketplaceEstate][]> {
-  const lockedEstatesMap = new Map<string, RentalsLandOrEstate>();
+  const rentalEstatesTokenIds: string[] = [];
 
-  for (const lockedEstate of rentalEstates) {
-    lockedEstatesMap.set(lockedEstate.tokenId, lockedEstate);
+  // Keep a map of rental estates to optimize the lookup later.
+  const rentalEstatesByTokenId = new Map<string, RentalsLandOrEstate>();
+
+  for (const rentalEstate of rentalEstates) {
+    const tokenId = rentalEstate.tokenId;
+    rentalEstatesTokenIds.push(tokenId);
+    rentalEstatesByTokenId.set(tokenId, rentalEstate);
   }
 
   const query: any = {
     estates: {
       __args: {
         where: {
-          tokenId_in: rentalEstates.map((estate) => estate.tokenId),
+          tokenId_in: rentalEstatesTokenIds,
           size_gt: 0
         },
         first: 1000,
@@ -153,33 +154,38 @@ async function fetchMarketplaceEstatesForProvidedRentalAssets(
     }
   };
 
+  // If a snapshot is provided, use it as another filter of the query.
   if (typeof snapshot === 'number') {
     query.estates.__args.block = { number: snapshot };
   }
 
-  const acc: [RentalsLandOrEstate, MarketplaceEstate][] = [];
+  const rentalAndMarketplaceEstates: [
+    RentalsLandOrEstate,
+    MarketplaceEstate
+  ][] = [];
 
-  let hasNext = true;
+  let hasMoreResults = true;
 
-  while (hasNext) {
+  while (hasMoreResults) {
     const result = await subgraphRequest(options.subgraphs.marketplace, query);
 
-    const estates: MarketplaceEstate[] = result.estates;
+    const marketplaceEstates: MarketplaceEstate[] = result.estates;
 
-    if (estates.length < query.estates.__args.first) {
-      hasNext = false;
-    } else {
-      query.estates.__args.skip += query.estates.__args.first;
-    }
+    // If the received length matches the requested length, there might be more results.
+    hasMoreResults = marketplaceEstates.length === query.estates.__args.first;
+    // If there are more results, skip the ones we already have on the next query.
+    query.estates.__args.skip += query.estates.__args.first;
 
-    for (const estate of estates) {
-      const lockedEstate = lockedEstatesMap.get(estate.tokenId);
+    for (const marketplaceEstate of marketplaceEstates) {
+      const rentalEstate = rentalEstatesByTokenId.get(
+        marketplaceEstate.tokenId
+      );
 
-      if (lockedEstate) {
-        acc.push([lockedEstate, estate]);
+      if (rentalEstate) {
+        rentalAndMarketplaceEstates.push([rentalEstate, marketplaceEstate]);
       }
     }
   }
 
-  return acc;
+  return rentalAndMarketplaceEstates;
 }
