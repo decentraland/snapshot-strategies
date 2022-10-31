@@ -1,49 +1,30 @@
 # Decentraland Rental Lessors
 
-This strategy allows users to calculate the total amount
+This strategy allows calculating the VP of Land/Estate owners after ownership is transferred to the Rentals contract.
 
-This strategy allows users to calculate the total amount of Decentraland wearables and apply a multiplier to each rarity. Additionally you can limit the collections that will be taken into account using a list of ids.
+Thanks to this, the VP that the user had before utilizing the rentals feature will not be lost.
 
 ## Example
 
-The parameters should look like this:
+The following example params are for obtaining the VP users have after locking their Lands/Estates in the Rentals contract in the Goerli network.
 
 ```json
 {
-    "symbol": "WEARABLE",
-    "multipliers": {
-        "unique": 1000000,
-        "mythic": 100000,
-        "legendary": 10000,
-        "epic": 1000,
-        "rare": 100,
-        "uncommon": 10,
-        "common": 1
-    }
+  "subgraphs": {
+    "rentals": "https://api.thegraph.com/subgraphs/name/decentraland/rentals-ethereum-goerli",
+    "marketplace": "https://api.thegraph.com/subgraphs/name/decentraland/marketplace-goerli"
+  },
+  "addresses": {
+    "estate": "0xc9a46712e6913c24d15b46ff12221a79c4e251dc",
+    "land": "0x25b6b4bac4adb582a0abd475439da6730777fbf7"
+  },
+  "multipliers": {
+    "estateSize": 2000,
+    "land": 2000
+  }
 }
 ```
 
-If you want to restrict which collection is taken into account, parameters should look like this:
+The land multiplier determines how much VP is given by each Land the address possesses in the Rentals contract. For example, if the user has 5 Lands in the Rentals contract, it will be given 5 \* 2000 VP.
 
-```json
-{
-    "symbol": "WEARABLE",
-    "collections": [
-        "0x32b7495895264ac9d0b12d32afd435453458b1c6",
-        "0xd35147be6401dcb20811f2104c33de8e97ed6818",
-        "0xc04528c14c8ffd84c7c1fb6719b4a89853035cdd",
-        "0xc1f4b0eea2bd6690930e6c66efd3e197d620b9c2",
-        "0xf64dc33a192e056bb5f0e5049356a0498b502d50",
-        "0xc3af02c0fd486c8e9da5788b915d6fff3f049866"
-    ],
-    "multipliers": {
-        "unique": 1000000,
-        "mythic": 100000,
-        "legendary": 10000,
-        "epic": 1000,
-        "rare": 100,
-        "uncommon": 10,
-        "common": 1
-    }
-}
-```
+The estateSize multiplier determines how much VP is given to the original owner for each Land the Estate locked in the Rentals contract possesses. For example, if the address has 1 Estate in the Rentals contract composed of 5 Lands, the user will be given 5 \* 2000 VP as well.
