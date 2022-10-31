@@ -66,7 +66,7 @@ export async function strategy(
   return scores;
 }
 
-// For a given list of addresses, fetch all the lands and estates that belonged to them before being transferred to the Rentals contract
+// For a given list of addresses, fetch all the lands and estates that belonged to them before being transferred to the Rentals contract.
 async function fetchLandsAndEstatesInRentalsContract(
   addresses,
   options,
