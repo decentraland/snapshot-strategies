@@ -1,35 +1,27 @@
 [
   {
-    "name": "Example query",
+    "name": "Get VP of LAND and Estate owner's that have their assets locked in the Rentals contract",
     "strategy": {
       "name": "decentraland-rental-lessors",
       "params": {
-        "symbol": "WEARABLE",
-        "collections": [
-          "0x32b7495895264ac9d0b12d32afd435453458b1c6",
-          "0xd35147be6401dcb20811f2104c33de8e97ed6818",
-          "0xc04528c14c8ffd84c7c1fb6719b4a89853035cdd",
-          "0xc1f4b0eea2bd6690930e6c66efd3e197d620b9c2",
-          "0xf64dc33a192e056bb5f0e5049356a0498b502d50",
-          "0xc3af02c0fd486c8e9da5788b915d6fff3f049866"
-        ],
+        "subgraphs": {
+          "rentals": "https://api.thegraph.com/subgraphs/name/decentraland/rentals-ethereum-goerli"
+        },
+        "addresses": {
+          "estate": "0xc9a46712e6913c24d15b46ff12221a79c4e251dc",
+          "land": "0x25b6b4bac4adb582a0abd475439da6730777fbf7"
+        },
         "multipliers": {
-          "unique": 1000000,
-          "mythic": 100000,
-          "legendary": 10000,
-          "epic": 1000,
-          "rare": 100,
-          "uncommon": 10,
-          "common": 1
+          "estateSize": 2000,
+          "land": 2000
         }
       }
     },
-    "network": "1",
+    "network": "5",
     "addresses": [
-      "0xd210dc1dd26751503cbf1b8c9154224707820da8",
-      "0x8cff6832174091dae86f0244e3fd92d4ced2fe07",
-      "0xFC9C4C0e17c3A3139a77d86282eCf18687C14780"
+      "0x747c6f502272129bf1ba872a1903045b837ee86c",
+      "0xbad79d832671d91b4bba85f600932faec0e5fd7c"
     ],
-    "snapshot": 12453375
+    "snapshot": 7866054
   }
 ]
