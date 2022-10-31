@@ -43,17 +43,16 @@ export async function strategy(
 
   // For each Land, increase the score of the original owner by the land multiplier.
   for (const land of lockedLands) {
-    scores[land.lessor] += options.multipliers.land;
+    scores[getAddress(land.lessor)] += options.multipliers.land;
   }
 
   await updateEstatesWithTheirSize(lockedEstates, options, snapshot);
 
+  // For each Estate, increase the score of the original owner by the size of the estate times the multiplier.
   for (const estate of lockedEstates) {
-    scores[estate.lessor] +=
+    scores[getAddress(estate.lessor)] +=
       estate.estateSize! * options.multipliers.estateSize;
   }
-
-  console.log(scores)
 
   return scores;
 }
@@ -107,6 +106,8 @@ async function fetchLandsAndEstatesLockedInRentalsContract(
 
     if (rentalAssets.length < query.rentalAssets.__args.first) {
       hasNext = false;
+    } else {
+      query.rentalAssets.__args.skip += query.rentalAssets.__args.first;
     }
 
     accRentalAssets = [...accRentalAssets, ...rentalAssets];
@@ -131,16 +132,13 @@ async function updateEstatesWithTheirSize(
       __args: {
         where: {
           tokenId_in: lockedEstates.map((estate) => estate.tokenId),
-          category: 'estate',
-          searchEstateSize_gt: 0
+          size_gt: 0
         },
         first: 1000,
         skip: 0
       },
-      owner: {
-        id: true
-      },
-      searchEstateSize: true
+      tokenId: true,
+      size: true
     }
   };
 
@@ -161,6 +159,8 @@ async function updateEstatesWithTheirSize(
 
     if (estates.length < query.estates.__args.first) {
       hasNext = false;
+    } else {
+      query.estates.__args.skip += query.estates.__args.first;
     }
 
     for (const estate of estates) {
