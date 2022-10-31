@@ -1,6 +1,6 @@
 import { getAddress } from '@ethersproject/address';
 import { subgraphRequest } from '../../utils';
-import { AssetLockedInRentalsContract } from './types';
+import { MarketplaceEstate, RentalsLandOrEstate, Scores } from './types';
 
 export const author = 'fzavalia';
 export const version = '0.1.0';
@@ -13,7 +13,7 @@ export async function strategy(
   options,
   snapshot
 ) {
-  const scores = {};
+  const scores: Scores = {};
 
   // Initialize scores for every provided address as 0
   for (const address of addresses) {
@@ -21,56 +21,66 @@ export async function strategy(
   }
 
   // For the provided addresses, fetch all their Lands and Estates that have been locked in the rentals contract.
-  const lockedAssets = await fetchLandsAndEstatesLockedInRentalsContract(
+  const rentalLandsAndEstates = await fetchLandsAndEstatesInRentalsContract(
     addresses,
     options,
     snapshot
   );
 
-  const lockedLands: AssetLockedInRentalsContract[] = [];
-  const lockedEstates: AssetLockedInRentalsContract[] = [];
+  const rentalLands: RentalsLandOrEstate[] = [];
+  const rentalEstates: RentalsLandOrEstate[] = [];
 
   // Separate the assets into Lands and Estates
-  for (const asset of lockedAssets) {
-    switch (asset.contractAddress) {
-      case options.addresses.land:
-        lockedLands.push(asset);
+  for (const rentalLandOrEstate of rentalLandsAndEstates) {
+    switch (rentalLandOrEstate.contractAddress) {
+      case options.addresses.land.toLowerCase():
+        rentalLands.push(rentalLandOrEstate);
         break;
-      case options.addresses.estate:
-        lockedEstates.push(asset);
+      case options.addresses.estate.toLowerCase():
+        rentalEstates.push(rentalLandOrEstate);
+        break;
+      default:
+        console.log('Not a Land nor an Estate');
     }
   }
 
   // For each Land, increase the score of the original owner by the land multiplier.
-  for (const land of lockedLands) {
+  for (const land of rentalLands) {
     scores[getAddress(land.lessor)] += options.multipliers.land;
   }
 
-  await updateEstatesWithTheirSize(lockedEstates, options, snapshot);
+  // Fill the estateSize prop on locked estates.
+  const rentalAndMarketplaceEstates =
+    await fetchMarketplaceEstatesForProvidedRentalAssets(
+      rentalEstates,
+      options,
+      snapshot
+    );
 
   // For each Estate, increase the score of the original owner by the size of the estate times the multiplier.
-  for (const estate of lockedEstates) {
-    scores[getAddress(estate.lessor)] +=
-      estate.estateSize! * options.multipliers.estateSize;
+  for (const [rentalEstate, marketplaceEstate] of rentalAndMarketplaceEstates) {
+    scores[getAddress(rentalEstate.lessor)] +=
+      marketplaceEstate.size * options.multipliers.estateSize;
   }
 
   return scores;
 }
 
-async function fetchLandsAndEstatesLockedInRentalsContract(
+// For a given list of addresses, fetch all the lands and estates that belonged to them before being transferred to the Rentals contract
+async function fetchLandsAndEstatesInRentalsContract(
   addresses,
   options,
   snapshot
-): Promise<AssetLockedInRentalsContract[]> {
+): Promise<RentalsLandOrEstate[]> {
   const query: any = {
     rentalAssets: {
       __args: {
         where: {
           contractAddress_in: [
-            options.addresses.estate,
-            options.addresses.land
+            options.addresses.estate.toLowerCase(),
+            options.addresses.land.toLowerCase()
           ],
-          lessor_in: addresses,
+          lessor_in: addresses.map((address) => address.toLowerCase()),
           isClaimed: false
         },
         first: 1000,
@@ -87,7 +97,7 @@ async function fetchLandsAndEstatesLockedInRentalsContract(
     query.rentalAssets.__args.block = { number: snapshot };
   }
 
-  let accRentalAssets: AssetLockedInRentalsContract[] = [];
+  let acc: RentalsLandOrEstate[] = [];
 
   let hasNext = true;
 
@@ -102,7 +112,7 @@ async function fetchLandsAndEstatesLockedInRentalsContract(
       break;
     }
 
-    const rentalAssets: AssetLockedInRentalsContract[] = result.rentalAssets;
+    const rentalAssets: RentalsLandOrEstate[] = result.rentalAssets;
 
     if (rentalAssets.length < query.rentalAssets.__args.first) {
       hasNext = false;
@@ -110,20 +120,21 @@ async function fetchLandsAndEstatesLockedInRentalsContract(
       query.rentalAssets.__args.skip += query.rentalAssets.__args.first;
     }
 
-    accRentalAssets = [...accRentalAssets, ...rentalAssets];
+    acc = [...acc, ...rentalAssets];
   }
 
-  return accRentalAssets;
+  return acc;
 }
 
-async function updateEstatesWithTheirSize(
-  lockedEstates: AssetLockedInRentalsContract[],
+// For a given list of estates obtained from the rentals subgraph, fetch the estates that correspond to them in the marketplace subgraph.
+async function fetchMarketplaceEstatesForProvidedRentalAssets(
+  rentalEstates: RentalsLandOrEstate[],
   options,
   snapshot
-): Promise<void> {
-  const lockedEstatesMap = new Map<string, AssetLockedInRentalsContract>();
+): Promise<[RentalsLandOrEstate, MarketplaceEstate][]> {
+  const lockedEstatesMap = new Map<string, RentalsLandOrEstate>();
 
-  for (const lockedEstate of lockedEstates) {
+  for (const lockedEstate of rentalEstates) {
     lockedEstatesMap.set(lockedEstate.tokenId, lockedEstate);
   }
 
@@ -131,7 +142,7 @@ async function updateEstatesWithTheirSize(
     estates: {
       __args: {
         where: {
-          tokenId_in: lockedEstates.map((estate) => estate.tokenId),
+          tokenId_in: rentalEstates.map((estate) => estate.tokenId),
           size_gt: 0
         },
         first: 1000,
@@ -146,16 +157,14 @@ async function updateEstatesWithTheirSize(
     query.estates.__args.block = { number: snapshot };
   }
 
+  const acc: [RentalsLandOrEstate, MarketplaceEstate][] = [];
+
   let hasNext = true;
 
   while (hasNext) {
     const result = await subgraphRequest(options.subgraphs.marketplace, query);
 
-    if (!result || !result.estates || !Array.isArray(result.estates)) {
-      break;
-    }
-
-    const estates: any[] = result.estates;
+    const estates: MarketplaceEstate[] = result.estates;
 
     if (estates.length < query.estates.__args.first) {
       hasNext = false;
@@ -167,8 +176,10 @@ async function updateEstatesWithTheirSize(
       const lockedEstate = lockedEstatesMap.get(estate.tokenId);
 
       if (lockedEstate) {
-        lockedEstate.estateSize = estate.size;
+        acc.push([lockedEstate, estate]);
       }
     }
   }
+
+  return acc;
 }
